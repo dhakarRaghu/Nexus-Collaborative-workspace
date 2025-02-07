@@ -4,11 +4,12 @@ import prisma from "@/lib/db";
 import { getAuthSession } from "@/lib/auth";
 import { AdvancedScraper } from "@/lib/scraping";
 
-type Props = {
-  params: { projectId: string };
-};
-
-export default async function ProjectDetails({ params }: Props) {
+interface Props {
+  params: Promise<{ projectId: string }>;
+}
+export default async function ProjectDetails( props : Props) {
+  const { projectId } = await props.params;
+  console.log("projectId", projectId);
   // Retrieve the current session
   const session = await getAuthSession();
   if (!session?.user) {
@@ -17,7 +18,7 @@ export default async function ProjectDetails({ params }: Props) {
 
   // Fetch the project details from the database using the projectId from route parameters
   const project = await prisma.webAnalysis.findUnique({
-    where: { id: params.projectId },
+    where: { id: projectId },
   });
 
   if (!project) {
@@ -38,6 +39,7 @@ export default async function ProjectDetails({ params }: Props) {
   }
 
   // Create an instance of AdvancedScraper to scrape the project's URL
+  console.log("Scraping URL:", project.url);
   const scraper = new AdvancedScraper();
   let scrapedContent = "";
   try {

@@ -295,19 +295,6 @@ export class AdvancedScraper {
 
     console.log("Scraped content length:", finalResult?.content.length);
     console.log("Scraped content:", finalResult?.content);
-    // ===== Chunking & Embedding =====
-    // if (finalResult) {
-    //   // Agentically chunk the content.
-    //   const chunks = await agenticChunking(finalResult.content);
-    //   console.log("Content divided into chunks:", chunks.length);
-
-    //   // Get embeddings for each chunk in batches (default batch size is 3).
-    //   const chunkEmbeddings = await getEmbeddingsForChunks(chunks, 3);
-    //   // Optionally, aggregate the embeddings (for example, by averaging).
-    //   // For now, we attach the list of embeddings.
-    //   finalResult.embedding = chunkEmbeddings;
-    //   console.log("Obtained embeddings for all chunks." , finalResult.embedding);
-    // }
 
     async function processContent(text: string) {
       try {

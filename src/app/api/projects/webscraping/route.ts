@@ -33,25 +33,25 @@ export async function POST(req: NextRequest) {
     });
 
     // ✅ Scrape the URL and store result
-    let scrapingResult = null;
-    const scraper = new AdvancedScraper();
+    // let scrapingResult = null;
+    // const scraper = new AdvancedScraper();
 
-    try {
-        console.log("Scraping URL:", body.url , encodeURIComponent(body.url));
-      scrapingResult = await scraper.scrape(body.url);
-    } catch (scrapingError) {
-      console.error("Scraping error:", scrapingError);
-    } finally {
-      await scraper.close();
-    }
+    // try {
+    //     console.log("Scraping URL:", body.url , encodeURIComponent(body.url));
+    //   scrapingResult = await scraper.scrape(body.url);
+    // } catch (scrapingError) {
+    //   console.error("Scraping error:", scrapingError);
+    // } finally {
+    //   await scraper.close();
+    // }
 
     // ✅ Return project and scraping results together
     return NextResponse.json(
       {
         project,
-        scrapingResult: scrapingResult || { error: "Failed to scrape content" },
+        // scrapingResult: scrapingResult || { error: "Failed to scrape content" },
       },
-      { status: scrapingResult ? 200 : 500 }
+      { status: project ? 200 : 500 }
     );
 
   } catch (error) {

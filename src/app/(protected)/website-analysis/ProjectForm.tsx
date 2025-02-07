@@ -31,6 +31,8 @@ export default function ProjectForm() {
         throw new Error(data.error || "Failed to create project");
       }
       // Redirect to the project details page after creation.
+      console.log("Project created:", data.project);
+      console.log("scrape" , data.scrape);
       router.push(`/website-analysis/${data.project.id}`);
     } catch (err) {
       console.error("Error creating project:", err);
