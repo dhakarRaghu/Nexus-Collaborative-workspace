@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react'
-import { signIn, signOut, useSession } from 'next-auth/react'
+import { signOut, useSession } from 'next-auth/react'
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar'
 import { AppSidebar } from './app-sidebar'
 import { ModeToggle } from './mode-toggle'
@@ -9,8 +9,10 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Bell, Search } from 'lucide-react'
-import { Input } from '@/components/ui/input'
+import { Bell } from 'lucide-react'
+import { getAuthSession } from '@/lib/auth'
+import { redirect } from 'next/navigation'
+// import { Input } from '@/components/ui/input'
 
 type Props = {
   children: React.ReactNode
@@ -107,21 +109,16 @@ const SidebarLayout = ({ children }: Props) => {
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem 
-                        onClick={() => signOut()}
+                        onClick={() => {
+                          signOut({ callbackUrl: '/' })
+                        }}
                         className="text-destructive focus:text-destructive"
                       >
                         Sign out
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
-                ) : (
-                  <Button 
-                    onClick={() => signIn()}
-                    className="bg-primary hover:bg-primary/90"
-                  >
-                    Sign In
-                  </Button>
-                )}
+                ) : null}
               </div>
             </div>
           </header>

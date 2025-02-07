@@ -31,8 +31,8 @@ const items = [
     icon: Bot,
   },
   {
-    title: "Meetings",
-    url: "/meetings",
+    title: "Website Analysis",
+    url: "/website-analysis",
     icon: Presentation,
   },
   {
