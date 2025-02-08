@@ -1,49 +1,55 @@
-import { Pool } from 'pg';
-import { PineconeClient } from "@pinecone-database/pinecone";
+import { Pinecone } from "@pinecone-database/pinecone";
 import { generateEmbedding } from './embedding';
 import { refineQuery, rerankResults, generateFinalAnswer } from './geminiAPI';
 import dotenv from 'dotenv';
 dotenv.config();
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
-
-/**
- * BM25 Search using PostgreSQL's full-text search.
- */
-export async function searchBM25(query: string): Promise<Array<{ text: string; score: number }>> {
-  const res = await pool.query(
-    `SELECT text,
-      ts_rank_cd(to_tsvector('english', text), plainto_tsquery($1)) AS score
-    FROM documents
-    WHERE to_tsvector('english', text) @@ plainto_tsquery($1)
-    ORDER BY score DESC
-    LIMIT 10;`,
-    [query]
-  );
-  return res.rows;
-}
-
 /**
  * Vector search using Pinecone.
+ *
+ * This function:
+ *  - Instantiates the Pinecone client.
+ *  - Retrieves the appropriate index (here: "chatpdf").
+ *  - Selects the namespace based on the given fileKey.
+ *  - Generates an embedding for the query.
+ *  - Runs the query against Pinecone and returns the top matches,
+ *    mapped to objects with "text" and "score" fields.
  */
-export async function searchEmbeddings(query: string): Promise<Array<{ text: string; score: number }>> {
-  const pinecone = new PineconeClient();
-  await pinecone.init({ apiKey: process.env.PINECONE_API_KEY! });
-  // Assume index name is "documents"
-  const index = pinecone.Index("documents");
-  const queryEmbedding = await generateEmbedding(query);
-  const queryResponse = await index.query({
-    vector: queryEmbedding,
-    topK: 10,
-    includeMetadata: true,
-  });
-  // Map the results
-  return queryResponse.matches.map(match => ({
-    text: match.metadata?.text || "",
-    score: match.score,
-  }));
+export async function searchEmbeddings(
+  query: string,
+  fileKey: string
+): Promise<Array<{ text: string; score: number }>> {
+  try {
+    // Create a Pinecone client instance.
+    const client = new Pinecone({
+      apiKey: process.env.PINECONE_API_KEY!,
+    });
+    
+    // Retrieve the index named "chatpdf".
+    const pineconeIndex = await client.index("nexus");
+    
+    // Use the provided fileKey as the namespace.
+    const namespace = pineconeIndex.namespace(fileKey);
+    
+    // Generate the embedding for the query.
+    const queryEmbedding = await generateEmbedding(query);
+    
+    // Query Pinecone with the generated embedding.
+    const queryResult = await namespace.query({
+      topK: 5,
+      vector: queryEmbedding,
+      includeMetadata: true,
+    });
+    
+    // Map the matches to the expected format.
+    return (queryResult.matches || []).map(match => ({
+      text: String(match.metadata?.text || ""),
+      score: match.score ?? 0,
+    }));
+  } catch (error) {
+    console.error("Error querying embeddings", error);
+    throw error;
+  }
 }
 
 /**
@@ -55,23 +61,19 @@ function normalizeResults(results: Array<{ text: string; score: number }>): Arra
 }
 
 /**
- * Hybrid retrieval: combine BM25 and vector search results.
+ * Retrieval using vector search only.
  */
-export async function hybridRetrieve(query: string): Promise<string[]> {
-  const [bm25Results, vectorResults] = await Promise.all([
-    searchBM25(query),
-    searchEmbeddings(query),
-  ]);
-
-  const normalizedBM25 = normalizeResults(bm25Results);
+export async function retrieveVectorResults(query: string, projectURL: string): Promise<string[]> {
+  const vectorResults = await searchEmbeddings(query, projectURL);
   const normalizedVectors = normalizeResults(vectorResults);
 
-  // Merge results and sort by descending score
-  const combined = [...normalizedBM25, ...normalizedVectors].sort((a, b) => b.score - a.score);
-  // Take top 5 unique results (based on text)
+  // Sort by descending score.
+  const sortedResults = normalizedVectors.sort((a, b) => b.score - a.score);
+  
+  // Take the top 5 unique results (based on text).
   const uniqueResults: { [key: string]: number } = {};
   const topResults: string[] = [];
-  for (const result of combined) {
+  for (const result of sortedResults) {
     if (!uniqueResults[result.text]) {
       uniqueResults[result.text] = result.score;
       topResults.push(result.text);
@@ -82,19 +84,15 @@ export async function hybridRetrieve(query: string): Promise<string[]> {
 }
 
 /**
- * Full retrieval pipeline:
- * 1. Refine the query.
- * 2. Use hybrid retrieval to get initial results.
- * 3. Re-rank results using an LLM.
- * 4. Generate the final answer.
+ * Full retrieval pipeline.
  */
-export async function retrieveAnswer(query: string): Promise<string> {
+export async function retrieveAnswer(query: string, projectURL: string): Promise<string> {
   // Refine the query using Gemini/GPT.
   const refinedQuery = await refineQuery(query);
   console.log("Refined Query:", refinedQuery);
 
-  // Retrieve results using hybrid search.
-  const initialResults = await hybridRetrieve(refinedQuery);
+  // Retrieve results using vector search.
+  const initialResults = await retrieveVectorResults(refinedQuery, projectURL);
   console.log("Initial Retrieval Results:", initialResults);
 
   // Re-rank the results.
@@ -105,4 +103,3 @@ export async function retrieveAnswer(query: string): Promise<string> {
   const finalAnswer = await generateFinalAnswer(refinedQuery, rankedResults);
   return finalAnswer;
 }
-

@@ -55,8 +55,11 @@ export async function POST(req: Request) {
     // //      const gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
     // //      ...
     // //      return geminiAnswer
-    const aiMessageContent = "I'm sorry, I don't understand.";
-
+    const project = await prisma.webAnalysis.findFirst({
+      where: { id: projectId },
+    });
+    const aiMessageContent = await retrieveAnswer(lastUserMessage.content, project?.url || "") || "I'm sorry, I don't understand.";
+console.log("AI Message Content", aiMessageContent);
     // if (!aiMessageContent) {
     //   throw new Error("AI did not return a valid response");
     // }

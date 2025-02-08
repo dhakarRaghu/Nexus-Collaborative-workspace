@@ -1,45 +1,52 @@
+// components/MessageList.tsx
+import React from "react";
+import { Message } from "@/types/messages";
+import { cn } from "@/lib/utils"; // Assume a utility function to merge classNames
 import { Loader2 } from "lucide-react";
-import type { Message } from "@/types/messages";
 
-interface MessageListProps {
+interface Props {
   messages: Message[];
   isLoading: boolean;
 }
 
-export default function MessageList({ messages, isLoading }: MessageListProps) {
+const MessageList = ({ messages, isLoading }: Props) => {
   if (isLoading && messages.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
         <Loader2 className="w-6 h-6 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-2 p-4">
-      {messages.map((msg, index) => (
+    <div className="flex flex-col gap-2 px-4 py-6">
+      {messages.map((message, index) => (
         <div
           key={index}
-          className={`flex ${
-            msg.role === "USER" ? "justify-end" : "justify-start"
-          }`}
+          className={cn("flex", {
+            "justify-end pl-10": message.role === "USER",
+            "justify-start pr-10": message.role === "SYSTEM",
+          })}
         >
           <div
-            className={`rounded p-2 text-sm ${
-              msg.role === "USER" ? "bg-blue-500 text-black" : "bg-gray-300"
-            }`}
+            className={cn("rounded-lg px-3 py-2 text-sm shadow-md ring-1 ring-black-900/10", {
+              "bg-blue-500 text-white": message.role === "USER",
+              "bg-gray-300 text-black": message.role === "SYSTEM",
+            })}
           >
-            {msg.content}
+            {message.content}
           </div>
         </div>
       ))}
       {isLoading && messages.length > 0 && (
-        <div className="flex justify-start">
-          <div className="p-2 text-sm bg-gray-300">
+        <div className="flex justify-start pr-10">
+          <div className="rounded-lg px-3 py-1 shadow-md ring-1 ring-gray-900/10">
             <Loader2 className="w-4 h-4 animate-spin" />
           </div>
         </div>
       )}
     </div>
   );
-}
+};
+
+export default MessageList;

@@ -38,7 +38,7 @@ export default async function ProjectForm() {
             {/* The Input components must have a "name" so their values are available in FormData */}
             <Input name="name" placeholder="Project Name" required />
             <Input name="url" placeholder="https://example.com" required />
-            <Button type="submit" className="flex items-center gap-2 min-w-[120px]">
+            <Button  type="submit" className="flex items-center gap-2 min-w-[120px]">
               Analyze <ArrowRight className="h-4 w-4" />
             </Button>
           </div>
