@@ -57,16 +57,40 @@ model User {
   webAnalytic webAnalysis[]
 }
 
+enum MessageRole {
+  USER
+  SYSTEM
+}
 
 model webAnalysis {
   id         String   @id @default(cuid())
   name       String
   url        String   @unique
-  content    String   // The full scraped text content
-  embedding  Json?    // Optional: store the aggregated embedding as JSON
+  content    String?
+  embedding  Json?
   userId     String
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
   user       User     @relation(fields: [userId], references: [id])
+  chats      Chat[]
+}
+
+model Chat {
+  id        Int       @id @default(autoincrement())
+  projectId String
+  createdAt DateTime  @default(now())
+
+  project   webAnalysis @relation(fields: [projectId], references: [id])
+  messages  Message[]
+}
+
+model Message {
+  id        Int         @id @default(autoincrement())
+  chatId    Int
+  content   String
+  role      MessageRole
+  createdAt DateTime    @default(now())
+
+  chat      Chat        @relation(fields: [chatId], references: [id])
 }

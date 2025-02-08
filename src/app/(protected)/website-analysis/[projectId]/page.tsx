@@ -1,15 +1,17 @@
+// app/website-analysis/[projectId]/page.tsx
 import React from "react";
 import { redirect } from "next/navigation";
 import prisma from "@/lib/db";
 import { getAuthSession } from "@/lib/auth";
 import Link from "next/link";
+import ChatSection from "@/components/ChatSection"; // A client component for chat interactivity
 
 interface Props {
-  params: Promise<{ projectId: string }>;
+  params: Promise<{  projectId: string}>;
 }
 
-export default async function ProjectDetails(props: Props) {
-  // Get the projectId from the route params.
+export default async function ProjectDetails( props : Props) {
+  // Destructure params (no need to await because params is an object here)
   const { projectId } = await props.params;
   console.log("projectId", projectId);
 
@@ -32,7 +34,7 @@ export default async function ProjectDetails(props: Props) {
     );
   }
 
-  // (Optional) Ensure that the project belongs to the current user.
+  // (Optional) Check that the project belongs to the user.
   if (project.userId !== session.user.id) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -42,28 +44,32 @@ export default async function ProjectDetails(props: Props) {
   }
 
   // Use the stored scraped content.
-  const scrapedtext = project.content;
+  const scrapedContent = project.content;
 
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold mb-4">{project.name}</h1>
       <Link href={project.url} target="_blank" rel="noopener noreferrer">
-      <div>
-        url  : <p className="text-sm text-blue-500 underline mb-8"> {project.url}</p>
-      </div>
-      URL:
+        <div>
+          URL:{" "}
+          <p className="text-sm text-blue-500 underline mb-8">
+            {project.url}
+          </p>
+        </div>
       </Link>
-      
+
       <div>
         <h2 className="text-2xl font-semibold mb-4">Scraped Content</h2>
-        <div 
-          className="prose" 
-          style={{ whiteSpace: "pre-wrap" }} // Preserve line breaks and whitespace
-        >
-          {scrapedtext ? scrapedtext : <p>No content available.</p>}
+        <div className="prose" style={{ whiteSpace: "pre-wrap" }}>
+          {scrapedContent ? scrapedContent : <p>No content available.</p>}
         </div>
       </div>
-      
+
+      <div className="mt-8">
+        <h2 className="text-2xl font-semibold mb-4">Chat Section</h2>
+        {/* Pass the project URL as a prop to the chat component (e.g. as namespace) */}
+        <ChatSection  projectId={projectId} />
+      </div>
     </div>
   );
 }
