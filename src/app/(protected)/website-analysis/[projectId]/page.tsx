@@ -2,21 +2,24 @@ import React from "react";
 import { redirect } from "next/navigation";
 import prisma from "@/lib/db";
 import { getAuthSession } from "@/lib/auth";
-import { AdvancedScraper } from "@/lib/scraping";
+import Link from "next/link";
 
 interface Props {
   params: Promise<{ projectId: string }>;
 }
-export default async function ProjectDetails( props : Props) {
+
+export default async function ProjectDetails(props: Props) {
+  // Get the projectId from the route params.
   const { projectId } = await props.params;
   console.log("projectId", projectId);
-  // Retrieve the current session
+
+  // Retrieve the current session.
   const session = await getAuthSession();
   if (!session?.user) {
     redirect("/login");
   }
 
-  // Fetch the project details from the database using the projectId from route parameters
+  // Fetch the project details from the database.
   const project = await prisma.webAnalysis.findUnique({
     where: { id: projectId },
   });
@@ -29,7 +32,7 @@ export default async function ProjectDetails( props : Props) {
     );
   }
 
-  // (Optional) Ensure that the project belongs to the current user
+  // (Optional) Ensure that the project belongs to the current user.
   if (project.userId !== session.user.id) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -38,36 +41,29 @@ export default async function ProjectDetails( props : Props) {
     );
   }
 
-  // Create an instance of AdvancedScraper to scrape the project's URL
-  console.log("Scraping URL:", project.url);
-  const scraper = new AdvancedScraper();
-  let scrapedContent = "";
-  try {
-    const result = await scraper.scrape(project.url);
-    // Here, result.content is assumed to be the scraped text.
-    scrapedContent = result ? result.content : "No content available";
-  } catch (error) {
-    console.error("Scraping error:", error);
-    scrapedContent = "Error occurred while scraping content.";
-  } finally {
-    await scraper.close();
-  }
+  // Use the stored scraped content.
+  const scrapedtext = project.content;
 
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold mb-4">{project.name}</h1>
-      <p className="text-sm text-muted-foreground mb-8">URL: {project.url}</p>
+      <Link href={project.url} target="_blank" rel="noopener noreferrer">
+      <div>
+        url  : <p className="text-sm text-blue-500 underline mb-8"> {project.url}</p>
+      </div>
+      URL:
+      </Link>
       
       <div>
         <h2 className="text-2xl font-semibold mb-4">Scraped Content</h2>
-        <div className="prose">
-          {scrapedContent ? (
-            <pre>{scrapedContent}</pre>
-          ) : (
-            <p>No content available.</p>
-          )}
+        <div 
+          className="prose" 
+          style={{ whiteSpace: "pre-wrap" }} // Preserve line breaks and whitespace
+        >
+          {scrapedtext ? scrapedtext : <p>No content available.</p>}
         </div>
       </div>
+      
     </div>
   );
 }

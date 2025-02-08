@@ -1,12 +1,22 @@
+// scraper.ts
 import axios from "axios";
 import * as cheerio from "cheerio";
 import { chromium, Browser, Page } from "playwright";
 import { JSDOM } from "jsdom";
 import { Readability } from "@mozilla/readability";
 import { setTimeout } from "timers/promises";
+import dotenv from "dotenv";
+dotenv.config();
 
-import { getFromCache, storeInCache, ScrapingResult } from "./cache"
-import { processTextToEmbeddings } from '@/lib/chunking'
+export interface ScrapingResult {
+  content: string;
+  metadata: {
+    title: string;
+    description: string;
+    timestamp: string;
+    source: "cheerio" | "playwright" | "readability" | "combined";
+  };
+}
 
 export class AdvancedScraper {
   private browser: Browser | null = null;
@@ -17,19 +27,17 @@ export class AdvancedScraper {
   // Custom extraction rules (CSS selectors) supplied by the user.
   private customSelectors: string[] | null = null;
 
-  // User-Agent and proxy rotation arrays.
+  // User-Agent rotation array.
   private userAgents = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
   ];
-  private proxies = [
-    // Optionally list proxy URLs, e.g. "http://username:password@proxy.example.com:8080"
-  ];
 
   // Rate-limiting (simple in‑memory counter)
   private static requestCount = 0;
   private static readonly MAX_REQUESTS_PER_MINUTE = 60;
+
   constructor(customSelectors?: string[]) {
     if (customSelectors) {
       this.customSelectors = customSelectors;
@@ -61,7 +69,7 @@ export class AdvancedScraper {
     // Set a random User-Agent.
     const randomUserAgent =
       this.userAgents[Math.floor(Math.random() * this.userAgents.length)];
-    await page.setExtraHTTPHeaders({ 'User-Agent': randomUserAgent });
+    await page.setExtraHTTPHeaders({ "User-Agent": randomUserAgent });
     return page;
   }
 
@@ -249,21 +257,13 @@ export class AdvancedScraper {
     }
   }
 
-
-  // ===== Combined Scraping, Chunking & Embedding =====
+  // ===== Combined Scraping =====
   async scrape(url: string): Promise<ScrapingResult | null> {
     if (AdvancedScraper.requestCount >= AdvancedScraper.MAX_REQUESTS_PER_MINUTE) {
       console.error("Rate limit exceeded");
       throw new Error("Rate limit exceeded");
     }
     AdvancedScraper.requestCount++;
-
-    // Return cached result if available.
-    const cachedResult = await getFromCache(url);
-    if (cachedResult) {
-      console.log("Returning cached result");
-      return cachedResult;
-    }
 
     const startTime = Date.now();
     const cheerioResult = await this.scrapeWithCheerio(url);
@@ -296,29 +296,11 @@ export class AdvancedScraper {
     console.log("Scraped content length:", finalResult?.content.length);
     console.log("Scraped content:", finalResult?.content);
 
-    async function processContent(text: string) {
-      try {
-        const { chunks, chunkEmbeddings, aggregatedEmbedding } = await processTextToEmbeddings(text);
-        console.log("Final Chunks:", chunks);
-        console.log("Chunk Embeddings:", chunkEmbeddings);
-        console.log("Aggregated Embedding:", aggregatedEmbedding);
-        // You may now use these embeddings for search, querying, etc.
-      } catch (error) {
-        console.error("Error processing text for embeddings:", error);
-      }
-    }
-
-    if (finalResult) {
-      await processContent(finalResult.content);
-    }
-
     const totalDuration = Date.now() - startTime;
     console.log(`Total scrape duration: ${totalDuration}ms`);
 
-    // Cache the result.
-    if (finalResult) {
-      await storeInCache(url, finalResult);
-    }
+    // Cache functionality removed
+
     return finalResult;
   }
 

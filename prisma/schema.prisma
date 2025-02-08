@@ -57,10 +57,13 @@ model User {
   webAnalytic webAnalysis[]
 }
 
+
 model webAnalysis {
   id         String   @id @default(cuid())
   name       String
-  url        String
+  url        String   @unique
+  content    String   // The full scraped text content
+  embedding  Json?    // Optional: store the aggregated embedding as JSON
   userId     String
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
