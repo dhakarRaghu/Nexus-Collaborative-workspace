@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Bot, CreditCard, LayoutDashboard, Presentation, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 import {
   Sidebar,
   SidebarHeader,
@@ -28,6 +27,11 @@ const items = [
   {
     title: "Q&A",
     url: "/qa",
+    icon: Bot,
+  },
+  {
+    title: "chatPdf",
+    url: "/chatPdf",
     icon: Bot,
   },
   {

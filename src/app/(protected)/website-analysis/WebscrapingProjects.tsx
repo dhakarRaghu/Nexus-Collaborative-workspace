@@ -1,4 +1,3 @@
-// app/webscraping/WebscrapingProjects.tsx
 import React from "react";
 import { redirect } from "next/navigation";
 import prisma from "@/lib/db";
@@ -6,6 +5,7 @@ import { getAuthSession } from "@/lib/auth";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import GetProject from "@/lib/query";
 
 const WebscrapingProjects = async () => {
   const session = await getAuthSession();
@@ -14,10 +14,7 @@ const WebscrapingProjects = async () => {
   }
 
   // Fetch all projects for the current user.
-  const projects = await prisma.webAnalysis.findMany({
-    where: { userId: session.user.id },
-    orderBy: { createdAt: "desc" },
-  });
+  const projects = await GetProject() || [];
 
   return (
     <div>

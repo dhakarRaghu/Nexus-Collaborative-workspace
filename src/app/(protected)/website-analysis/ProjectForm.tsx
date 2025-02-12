@@ -85,14 +85,14 @@ async function handleSubmit(formData: FormData) {
       throw new Error("Failed to scrape content");
     }
     // Process the scraped text to generate embeddings.
-    const { aggregatedEmbedding } = await processTextToEmbeddings(scraped);
+    // const { aggregatedEmbedding } = await processTextToEmbeddings(scraped);
     // Create a new project record in the database.
     const newProject = await prisma.webAnalysis.create({
       data: {
         name: projectName,
         url,
         content: scraped,
-        embedding: aggregatedEmbedding, // Store the aggregated embedding (as JSON)
+        // embedding: aggregatedEmbedding, // Store the aggregated embedding (as JSON)
         userId: session.user.id,
       },
     });

@@ -54,7 +54,8 @@ model User {
   accounts Account[]
   sessions Session[]
 
-  webAnalytic webAnalysis[]
+  webAnalytic  webAnalysis[]
+  chatPdfs     ChatPdf[]
 }
 
 enum MessageRole {
@@ -76,13 +77,32 @@ model webAnalysis {
   chats      Chat[]
 }
 
+model ChatPdf {
+  id         String   @id @default(cuid())
+  name       String
+  url        String   @unique
+  content    String?
+  embedding  Json?
+  userId     String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user       User     @relation(fields: [userId], references: [id])
+  chats      Chat[]
+}
+
 model Chat {
   id        Int       @id @default(autoincrement())
-  projectId String
-  createdAt DateTime  @default(now())
+  projectId     String?
+  projectPdfId  String? 
+  createdAt     DateTime  @default(now())
 
-  project   webAnalysis @relation(fields: [projectId], references: [id])
-  messages  Message[]
+  project       webAnalysis? @relation(fields: [projectId], references: [id])
+  projectPdf    ChatPdf?    @relation(fields: [projectPdfId], references: [id])
+  messages      Message[]
+
+
+
 }
 
 model Message {

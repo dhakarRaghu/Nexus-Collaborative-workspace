@@ -9,7 +9,7 @@ dotenv.config();
  *
  * This function:
  *  - Instantiates the Pinecone client.
- *  - Retrieves the appropriate index (here: "chatpdf").
+ *  - Retrieves the appropriate index (here: "nexus").
  *  - Selects the namespace based on the given fileKey.
  *  - Generates an embedding for the query.
  *  - Runs the query against Pinecone and returns the top matches,
