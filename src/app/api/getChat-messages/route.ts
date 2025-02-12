@@ -10,8 +10,9 @@ export async function POST(req: Request) {
     }
 
     const chat = await prisma.chat.findFirst({
-      where: { projectId },
+      where: { projectPdfId: projectId },
     })
+    console.log("Chat msg : ", chat)
     if (!chat) {
       return NextResponse.json([], { status: 200 })
     }

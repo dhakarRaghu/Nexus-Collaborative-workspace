@@ -36,5 +36,6 @@ export async function uploadToPinecone(vectors: PineconeRecord[], namespace: str
     metadata: vector.metadata ? sanitizeMetadata(vector.metadata) : {},
   }));
   await ns.upsert(sanitizedVectors);
+  
   console.log("Vectors upserted successfully.");
 }

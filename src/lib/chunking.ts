@@ -1,4 +1,3 @@
-// chunking.ts
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import natural from 'natural';
 import { quantile } from 'd3-array';
@@ -7,35 +6,26 @@ import { generateEmbedding, generateEmbeddings } from './embedding';
 import dotenv from 'dotenv';
 dotenv.config();
 
-// Instantiate a generative model (used for LLM-based merge decisions if enabled)
-const generativeModel = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string).getGenerativeModel({
-  model: "text-bison-001",
-});
+// Instantiate a generative model once.
+const generativeModel = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string)
+  .getGenerativeModel({ model: "text-bison-001" });
 
 // In-memory cache for embeddings.
 const embeddingCache = new Map<string, number[]>();
 
-/**
- * Cached wrapper for generating a single embedding.
- * If the text has been processed before, returns the cached embedding.
- */
-async function cachedGenerateEmbedding(text: string): Promise<number[]> {
+// Cached wrapper for generating a single embedding.
+export async function cachedGenerateEmbedding(text: string): Promise<number[]> {
   if (embeddingCache.has(text)) {
     console.log("Using cached embedding for text:", text.substring(0, 30));
     return embeddingCache.get(text)!;
-  } else {
-    const emb = await generateEmbedding(text);
-    embeddingCache.set(text, emb);
-    return emb;
   }
+  const emb = await generateEmbedding(text);
+  embeddingCache.set(text, emb);
+  return emb;
 }
 
-/**
- * Cached wrapper for generating embeddings in batch.
- * For each text, it returns the cached embedding if available;
- * otherwise, it calls generateEmbeddings for those texts and updates the cache.
- */
-async function cachedGenerateEmbeddings(texts: string[], batchSize: number): Promise<number[][]> {
+// Cached wrapper for generating embeddings in batch.
+export async function cachedGenerateEmbeddings(texts: string[], batchSize: number): Promise<number[][]> {
   const embeddings: number[][] = new Array(texts.length);
   const textsToFetch: string[] = [];
   const indexesToFetch: number[] = [];
@@ -54,8 +44,7 @@ async function cachedGenerateEmbeddings(texts: string[], batchSize: number): Pro
   if (textsToFetch.length > 0) {
     const newEmbeddings = await generateEmbeddings(textsToFetch, batchSize);
     for (let j = 0; j < textsToFetch.length; j++) {
-      const text = textsToFetch[j];
-      embeddingCache.set(text, newEmbeddings[j]);
+      embeddingCache.set(textsToFetch[j], newEmbeddings[j]);
       embeddings[indexesToFetch[j]] = newEmbeddings[j];
     }
   }
@@ -73,14 +62,13 @@ export interface SentenceObject {
 }
 
 export interface ChunkingOptions {
-  bufferSize?: number; // adjacent sentences for context
-  mergeLengthThreshold?: number; // threshold to merge short chunks
-  cosineSimThreshold?: number; // cosine similarity threshold to merge
-  percentileThreshold?: number; // percentile for semantic shift detection
-  useLLMForMerge?: boolean; // whether to use an LLM decision for merging
+  bufferSize?: number; // Context window size.
+  mergeLengthThreshold?: number; // Threshold for merging short chunks.
+  cosineSimThreshold?: number; // Cosine similarity threshold for merging.
+  percentileThreshold?: number; // Percentile for semantic shift detection.
+  useLLMForMerge?: boolean; // Whether to use LLM-based merge decisions.
 }
 
-// Unified chunk interface that carries its text and metadata
 export interface ChunkWithMetadata {
   text: string;
   metadata: {
@@ -89,7 +77,7 @@ export interface ChunkWithMetadata {
   };
 }
 
-// Split text into sentences using a simple NLP tokenizer.
+// Split text into sentences using natural language processing.
 export function splitToSentencesUsingNLP(text: string): string[] {
   const cleanedText = text.replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim();
   if (!cleanedText) return [];
@@ -120,19 +108,21 @@ export function structureSentences(sentences: string[], bufferSize: number = 1):
   return sentenceObjects;
 }
 
-// Generate and attach embeddings for each structured sentence.
+// Generate and attach embeddings for each structured sentence in parallel.
 export async function generateAndAttachEmbeddings(sentenceObjects: SentenceObject[]): Promise<SentenceObject[]> {
-  for (let i = 0; i < sentenceObjects.length; i++) {
-    if (sentenceObjects[i].combined_sentence) {
-      try {
-        const embedding = await cachedGenerateEmbedding(sentenceObjects[i].combined_sentence!);
-        sentenceObjects[i].combined_sentence_embedding = embedding;
-        console.log(`Generated embedding for sentence index ${i}.`);
-      } catch (error) {
-        console.error(`Error generating embedding for sentence at index ${i}:`, error);
+  await Promise.all(
+    sentenceObjects.map(async (obj, i) => {
+      if (obj.combined_sentence) {
+        try {
+          const embedding = await cachedGenerateEmbedding(obj.combined_sentence);
+          obj.combined_sentence_embedding = embedding;
+          console.log(`Generated embedding for sentence index ${i}.`);
+        } catch (error) {
+          console.error(`Error generating embedding for sentence at index ${i}:`, error);
+        }
       }
-    }
-  }
+    })
+  );
   return sentenceObjects;
 }
 
@@ -152,7 +142,11 @@ export function calculateCosineDistancesAndSignificantShifts(
 ): { updatedArray: SentenceObject[]; significantShiftIndices: number[] } {
   const distances: number[] = [];
   const updatedArray = sentenceObjects.map((obj, index, arr) => {
-    if (index < arr.length - 1 && obj.combined_sentence_embedding && arr[index + 1].combined_sentence_embedding) {
+    if (
+      index < arr.length - 1 &&
+      obj.combined_sentence_embedding &&
+      arr[index + 1].combined_sentence_embedding
+    ) {
       const sim = cosineSimilarity(obj.combined_sentence_embedding!, arr[index + 1].combined_sentence_embedding!);
       const distance = 1 - sim;
       distances.push(distance);
@@ -160,6 +154,12 @@ export function calculateCosineDistancesAndSignificantShifts(
     }
     return { ...obj, distance_to_next: undefined };
   });
+  
+  if (distances.length === 0) {
+    console.warn("No distances computed; returning empty significant shift indices.");
+    return { updatedArray, significantShiftIndices: [] };
+  }
+  
   const sortedDistances = [...distances].sort((a, b) => a - b);
   const quantileThreshold = percentileThreshold / 100;
   const breakpointDistanceThreshold = quantile(sortedDistances, quantileThreshold);
@@ -173,7 +173,7 @@ export function calculateCosineDistancesAndSignificantShifts(
   return { updatedArray, significantShiftIndices };
 }
 
-// Group sentences into chunks based on significant shifts; each chunk gets its metadata.
+// Group sentences into chunks based on significant shifts.
 export function groupSentencesIntoChunks(
   sentenceObjects: SentenceObject[],
   shiftIndices: number[]
@@ -194,12 +194,9 @@ export function groupSentencesIntoChunks(
   return chunks;
 }
 
-// LLM-based merge decision.
+// LLM-based merge decision using the global generative model.
 async function shouldMergeChunksLLM(chunkA: string, chunkB: string): Promise<boolean> {
   console.log("Using LLM-based merge decision.");
-  const model = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string).getGenerativeModel({
-    model: "text-bison-001",
-  });
   const prompt = `You are a content merging assistant. Given two text chunks, decide if they should be merged to preserve context and coherence.
 
 Chunk A: "${chunkA}"
@@ -209,15 +206,15 @@ Chunk B: "${chunkB}"
 Please respond with a JSON object in the following format (without any additional text):
 {"merge": true} or {"merge": false}`;
   try {
-    const result = await model.generateContent(prompt);
-    console.log("LLM response:", result.response.text());
-    const parsed = JSON.parse(result.response.text());
+    const result = await generativeModel.generateContent(prompt);
+    const responseText = result.response.text();
+    console.log("LLM response:", responseText);
+    const parsed = JSON.parse(responseText);
     if (typeof parsed.merge === 'boolean') {
       return parsed.merge;
-    } else {
-      console.error("Unexpected response format from LLM:", result.response.text());
-      return shouldMergeChunksHeuristic(chunkA, chunkB);
     }
+    console.error("Unexpected response format from LLM:", responseText);
+    return shouldMergeChunksHeuristic(chunkA, chunkB);
   } catch (error) {
     console.error("Error using LLM for merge decision:", error);
     return shouldMergeChunksHeuristic(chunkA, chunkB);
@@ -225,9 +222,14 @@ Please respond with a JSON object in the following format (without any additiona
 }
 
 // Heuristic-based merge decision.
-async function shouldMergeChunksHeuristic(chunkA: string, chunkB: string, mergeLengthThreshold: number = 300, cosineSimThreshold: number = 0.9): Promise<boolean> {
+async function shouldMergeChunksHeuristic(
+  chunkA: string,
+  chunkB: string,
+  mergeLengthThreshold: number = 300,
+  cosineSimThreshold: number = 0.9
+): Promise<boolean> {
   if (chunkA.length < mergeLengthThreshold && chunkB.length < mergeLengthThreshold) {
-    console.log(`Merging chunks due to short length: lengths ${chunkA.length} and ${chunkB.length}`);
+    console.log(`Merging chunks due to short length: ${chunkA.length} and ${chunkB.length}`);
     return true;
   }
   try {
@@ -244,17 +246,29 @@ async function shouldMergeChunksHeuristic(chunkA: string, chunkB: string, mergeL
   }
 }
 
-// Decide whether to merge two chunks based on the options.
-export async function shouldMergeChunks(chunkA: string, chunkB: string, options: ChunkingOptions): Promise<boolean> {
+// Decide whether to merge two chunks.
+export async function shouldMergeChunks(
+  chunkA: string,
+  chunkB: string,
+  options: ChunkingOptions
+): Promise<boolean> {
   if (options.useLLMForMerge) {
     return shouldMergeChunksLLM(chunkA, chunkB);
   } else {
-    return shouldMergeChunksHeuristic(chunkA, chunkB, options.mergeLengthThreshold, options.cosineSimThreshold);
+    return shouldMergeChunksHeuristic(
+      chunkA,
+      chunkB,
+      options.mergeLengthThreshold,
+      options.cosineSimThreshold
+    );
   }
 }
 
-// Merge adjacent chunks agentically while preserving/updating metadata.
-export async function agenticMergeChunks(chunks: ChunkWithMetadata[], options: ChunkingOptions): Promise<ChunkWithMetadata[]> {
+// Merge adjacent chunks agentically.
+export async function agenticMergeChunks(
+  chunks: ChunkWithMetadata[],
+  options: ChunkingOptions
+): Promise<ChunkWithMetadata[]> {
   if (chunks.length === 0) return [];
   const mergedChunks: ChunkWithMetadata[] = [];
   let currentChunk = chunks[0];
@@ -280,7 +294,7 @@ export async function agenticMergeChunks(chunks: ChunkWithMetadata[], options: C
   return mergedChunks;
 }
 
-// Optional secondary reassessment (currently passthrough).
+// Optional secondary reassessment.
 export async function secondaryReassessment(chunks: ChunkWithMetadata[]): Promise<ChunkWithMetadata[]> {
   console.log("Secondary reassessment not implemented. Returning original chunks.");
   return chunks;
@@ -303,7 +317,7 @@ export function aggregateEmbeddings(embeddings: number[][]): number[] {
   return avg;
 }
 
-// Main process function: tokenizes, structures, attaches embeddings, groups, merges, and finally embeds chunks.
+// Main processing function: tokenizes, structures, attaches embeddings, groups, merges, and generates final embeddings.
 export async function processTextToEmbeddings(
   text: string,
   options: ChunkingOptions = {
@@ -316,28 +330,29 @@ export async function processTextToEmbeddings(
 ): Promise<{
   chunks: ChunkWithMetadata[];
   chunkEmbeddings: number[][];
-  aggregatedEmbedding: number[];
 }> {
   // Step 1: Tokenize and structure.
   const sentences = splitToSentencesUsingNLP(text);
   const structured = structureSentences(sentences, options.bufferSize);
   const withEmbeddings = await generateAndAttachEmbeddings(structured);
   const { updatedArray, significantShiftIndices } = calculateCosineDistancesAndSignificantShifts(withEmbeddings, options.percentileThreshold);
+  
   // Group into preliminary chunks.
   const preliminaryChunks = groupSentencesIntoChunks(updatedArray, significantShiftIndices);
+  
   // Step 2: Merge chunks agentically.
   const mergedChunks = await agenticMergeChunks(preliminaryChunks, options);
+  
   // Step 3: Optional secondary reassessment.
   const finalChunks = await secondaryReassessment(mergedChunks);
+  
   // Step 4: Generate embeddings for final chunks using caching.
   const textsForEmbedding = finalChunks.map(chunk => chunk.text);
   const chunkEmbeddings = await cachedGenerateEmbeddings(textsForEmbedding, 3);
-  // Step 5: Aggregate embeddings.
-  const aggregatedEmbedding = aggregateEmbeddings(chunkEmbeddings);
   console.log("Final processing complete.");
+  
   return {
     chunks: finalChunks,
     chunkEmbeddings,
-    aggregatedEmbedding,
   };
 }

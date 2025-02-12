@@ -1,106 +1,65 @@
-"use client";
+"use client"
 
-import { useState, useRef } from "react";
-import { Button } from "@/components/ui/button";
-import toast from "react-hot-toast";
-import { uploadPDF } from "@/lib/pdf-process";
-import { useRouter } from "next/navigation";  
+import { useState, useRef } from "react"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Upload } from "lucide-react"
+import toast from "react-hot-toast"
+import { uploadPDF } from "@/lib/pdf-process"
+import { useRouter } from "next/navigation"
 
 export default function UploadPDF() {
-  const router = useRouter(); 
-  const inputFileRef = useRef<HTMLInputElement>(null);
-  const [fileName, setFileName] = useState<string | null>(null);
-  const [dragActive, setDragActive] = useState<boolean>(false);
-  const [file, setFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [uploadedFile, setUploadedFile] = useState<{ text?: string; fileUrl?: string } | null>(null);
-  const [Id , setId ] = useState<string | null>(null);
+  const router = useRouter()
+  const inputFileRef = useRef<HTMLInputElement>(null)
+  const [file, setFile] = useState<File | null>(null)
+  const [uploading, setUploading] = useState<boolean>(false)
 
-  const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB max
-  const ALLOWED_FORMATS = ["application/pdf"]; // Only allow PDFs
+  const MAX_FILE_SIZE = 4 * 1024 * 1024 // 4MB
+  const ALLOWED_FORMATS = ["application/pdf"]
 
-  // Drag & Drop Handlers
-  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    setDragActive(true);
-  };
-
-  const handleDragLeave = () => {
-    setDragActive(false);
-  };
-
-  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    setDragActive(false);
-
-    if (event.dataTransfer.files.length > 0) {
-      handleFileChange(event.dataTransfer.files[0]);
-    }
-  };
-
-  const handleFileChange = async (selectedFile: File | null) => {
-    if (!selectedFile) return;
-
+  const handleFileChange = (selectedFile: File | null) => {
+    if (!selectedFile) return
     if (selectedFile.size > MAX_FILE_SIZE) {
-      toast.error("File size exceeds 4MB limit.");
-      return;
+      toast.error("File size exceeds 4MB limit.")
+      return
     }
     if (!ALLOWED_FORMATS.includes(selectedFile.type)) {
-      toast.error("Only PDF files are allowed.");
-      return;
+      toast.error("Only PDF files are allowed.")
+      return
     }
+    setFile(selectedFile)
+  }
 
-    setFile(selectedFile);
-    setFileName(selectedFile.name);
-    setError(null);
-  };
-
-  const handleUpload = async (selectedFile: File) => {
+  const handleUpload = async () => {
+    if (!file) return
     try {
-      setUploading(true);
-      const response = await uploadPDF(selectedFile);
+      setUploading(true)
+      const response = await uploadPDF(file)
       if (response.error) {
-        throw new Error(response.error);
+        throw new Error(response.error)
       }
-
-      setUploadedFile(response);
-      setFile(null);
-      setFileName(null);
-      setError(null);
-      toast.success("File uploaded successfully");
-      const projectId = response.chat_id
-      setId(projectId);
-      if (projectId) {
-          router.push(`/chatPdf/${projectId}`);
-      }
+      toast.success("Upload successful!")
+      // Optionally, redirect or update UI here
     } catch (err) {
-      setError("Upload failed. Please try again.");
+      toast.error("Upload failed. Please try again.")
     } finally {
-      setUploading(false);
+      setUploading(false)
     }
-  };
+  }
 
   return (
-    <div className="flex flex-col items-center w-full max-w-md">
-      {/* Drop Zone */}
+    <Card className="w-full max-w-md mx-auto p-6 space-y-6">
       <div
-        className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg cursor-pointer transition-all duration-200
-        ${dragActive ? "border-blue-600 bg-blue-100" : "border-gray-300"}`}
+        className="flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg cursor-pointer transition-all duration-200 border-gray-300 hover:border-primary hover:bg-primary/5"
         onClick={() => inputFileRef.current?.click()}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
       >
-        <p className="text-gray-600">
-          {dragActive ? "Drop the file here..." : "Drag & Drop your file here or Click to upload"}
-        </p>
-        <Button type="button" className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-200">
+        <Upload className="w-12 h-12 text-gray-400 mb-2" />
+        <p className="text-sm text-gray-600 text-center">Drag & Drop your file here or Click to upload</p>
+        <Button type="button" variant="outline" className="mt-4">
           Select File
         </Button>
       </div>
 
-      {/* Hidden Input Field */}
       <input
         ref={inputFileRef}
         type="file"
@@ -109,45 +68,12 @@ export default function UploadPDF() {
         onChange={(e) => handleFileChange(e.target.files?.[0] || null)}
       />
 
-      {/* Selected File Name */}
-      {fileName && <p className="text-gray-700 text-sm mt-2">Selected: {fileName}</p>}
+      {file && <p className="text-sm text-gray-700 text-center">Selected: {file.name}</p>}
 
-      {/* Error Message */}
-      {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
-
-      {/* Upload Button */}
-      <Button
-        type="button"
-        disabled={uploading}
-        className={`w-full mt-4 px-4 py-2 text-white rounded-lg transition duration-200 ${
-          uploading ? "bg-gray-500 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"
-        }`}
-        onClick={() => file && handleUpload(file)}
-      >
+      <Button type="button" disabled={uploading || !file} onClick={handleUpload} className="w-full">
         {uploading ? "Uploading..." : "Upload"}
       </Button>
-
-      {/* Uploaded File Info */}
-      {uploadedFile && (
-        <div className="mt-4 text-center">
-          <p className="text-gray-700">File uploaded successfully!</p>
-          {uploadedFile.fileUrl && (
-            <a href={uploadedFile.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
-              View File
-            </a>
-          )}
-          {uploadedFile.text && (
-            <div className="mt-2 p-2 border border-gray-300 rounded-md max-h-40 overflow-auto text-sm text-gray-700">
-              <strong>Extracted Text:</strong> {uploadedFile.text}
-              {/* <strong>Extracted link:</strong> {Id} */}
-
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-  
-
-  
+    </Card>
+  )
 }
+

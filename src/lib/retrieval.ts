@@ -83,6 +83,7 @@ export async function retrieveVectorResults(query: string, projectURL: string): 
   return topResults;
 }
 
+
 /**
  * Full retrieval pipeline.
  */

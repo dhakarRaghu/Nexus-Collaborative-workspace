@@ -100,9 +100,6 @@ model Chat {
   project       webAnalysis? @relation(fields: [projectId], references: [id])
   projectPdf    ChatPdf?    @relation(fields: [projectPdfId], references: [id])
   messages      Message[]
-
-
-
 }
 
 model Message {

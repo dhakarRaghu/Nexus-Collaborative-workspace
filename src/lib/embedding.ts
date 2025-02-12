@@ -3,12 +3,12 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
 dotenv.config();
 
-const googleai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string).getGenerativeModel({
-  model: "text-embedding-004",
-});
+const googleai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string)
+  .getGenerativeModel({ model: "text-embedding-004" });
 
-const MAX_PAYLOAD_BYTES = 9000;
-const OVERLAP_BYTES = 1000;
+export const MAX_PAYLOAD_BYTES = 9000;
+export const OVERLAP_BYTES = 1000;
+export const API_CALL_DELAY_MS = 0; // delay between API calls to avoid rate limiting
 
 function splitLargeTextIntoOverlappingChunks(text: string, maxBytes: number, overlapBytes: number): string[] {
   const encoder = new TextEncoder();
@@ -53,6 +53,11 @@ function safeTextForEmbedding(text: string): string[] {
   }
 }
 
+/**
+ * Generate embedding for a given text.
+ * If the text is too long, it is split into overlapping chunks and each chunk is processed sequentially
+ * with a delay between API calls. The final embedding is the average of the individual embeddings.
+ */
 export async function generateEmbedding(text: string): Promise<number[]> {
   const chunks = safeTextForEmbedding(text);
   if (chunks.length === 1) {
@@ -65,17 +70,24 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     }
   } else {
     try {
-      const embeddings = await Promise.all(chunks.map(chunk => googleai.embedContent(chunk)));
-      const allValues = embeddings.map(r => r.embedding.values);
-      const dims = allValues[0].length;
+      // Process each chunk sequentially with a delay to avoid rate limiting.
+      const embeddings: number[][] = [];
+      for (const chunk of chunks) {
+        const result = await googleai.embedContent(chunk);
+        embeddings.push(result.embedding.values);
+        // Wait before processing the next chunk.
+        await new Promise(resolve => setTimeout(resolve, API_CALL_DELAY_MS));
+      }
+      // Average the embeddings.
+      const dims = embeddings[0].length;
       const avgEmbedding = new Array(dims).fill(0);
-      for (const emb of allValues) {
+      for (const emb of embeddings) {
         for (let i = 0; i < dims; i++) {
           avgEmbedding[i] += emb[i];
         }
       }
       for (let i = 0; i < dims; i++) {
-        avgEmbedding[i] /= allValues.length;
+        avgEmbedding[i] /= embeddings.length;
       }
       return avgEmbedding;
     } catch (error) {
@@ -85,13 +97,23 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   }
 }
 
+/**
+ * Generate embeddings for an array of texts in batches.
+ * A delay is added between batches to manage rate limits.
+ */
 export async function generateEmbeddings(texts: string[], batchSize: number = 3): Promise<number[][]> {
   const embeddings: number[][] = [];
   for (let i = 0; i < texts.length; i += batchSize) {
     const batch = texts.slice(i, i + batchSize);
-    const batchResults = await Promise.all(batch.map(text => generateEmbedding(text)));
+    const batchResults = [];
+    // Process each text in the batch sequentially (to be safe), or adjust if parallel processing is acceptable.
+    for (const text of batch) {
+      const emb = await generateEmbedding(text);
+      batchResults.push(emb);
+    }
     embeddings.push(...batchResults);
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Delay between batches.
+    await new Promise(resolve => setTimeout(resolve, API_CALL_DELAY_MS));
   }
   return embeddings;
 }

@@ -1,5 +1,4 @@
-// components/ChatSection.tsx
-"use client";
+ "use client";
 import React, { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -9,31 +8,32 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import type { Message } from "@/types/messages";
 
-interface ChatSectionProps {
-  projectId: string; // the project identifier, used to look up/create the chat
+interface ChatPdfSectionProps {
+  projectId: string;
 }
 
-export default function ChatSection({ projectId }: ChatSectionProps) {
+export default function ChatPdfSection({ projectId }: ChatPdfSectionProps) {
   const [input, setInput] = useState("");
   const queryClient = useQueryClient();
 
+  // Fetch messages
   const { data: messages, isLoading } = useQuery({
     queryKey: ["chat", projectId],
     queryFn: async () => {
-      const res = await axios.post<Message[]>("/api/get-messages", { projectId });
+      const res = await axios.post<Message[]>("/api/getChat-messages", { projectId });
       return res.data;
     },
   });
 
+  // Handle message submission
   const mutation = useMutation({
     mutationFn: async (userMessage: string) => {
       const fullMessages: Message[] = [...(messages || []), { role: "USER", content: userMessage }];
-      const res = await axios.post("/api/chat", {
+      const res = await axios.post("/api/chatPdf", {
         projectId,
         messages: fullMessages,
       });
-      console.log("System message:", res.data);
-      return res.data;
+      return res.data; // Should return { message, role }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["chat", projectId] }); // Ensure UI refresh
@@ -41,15 +41,16 @@ export default function ChatSection({ projectId }: ChatSectionProps) {
     },
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Handle form submission
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
     mutation.mutate(input);
   };
 
   return (
-    <div className="relative max-h-screen overflow-scroll bg-gray-100" id="message-container">
-      <div className="sticky top-0 inset-x-0 p-4 bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 text-white font-semibold h-fit rounded-lg">
+    <div className="relative max-h-screen overflow-scroll bg-gray-100">
+      <div className="sticky top-0 inset-x-0 p-4 bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 text-white font-semibold">
         <h3 className="text-2xl">Chat with AI</h3>
       </div>
 

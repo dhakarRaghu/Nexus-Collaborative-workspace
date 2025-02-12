@@ -1,27 +1,35 @@
 "use server";
-import pdfParse from "pdf-parse";      // in nodemodule comments the testing part in pdf-parse/index.js  to eliminate the error 005...
-import { put } from  "@vercel/blob";
-import { redirect } from "next/navigation";
+import pdfParse from "pdf-parse"; // make sure pdf-parse is patched as needed
+import { put } from "@vercel/blob";
 import { getAuthSession } from "./auth";
 import prisma from "./db";
 import { processTextToEmbeddings } from "./chunking";
 import md5 from "md5";
 import { uploadToPinecone } from "./pineconedb";
+import { redirect } from "next/navigation";
 
 export async function uploadPDF(pdf: File | null) {
+  const session = await getAuthSession();
+  if (!session?.user) {
+    redirect("/login");
+  }
 
-    const session = await getAuthSession();
-    if (!session?.user) {
-      redirect("/login");
-    }
+  // Ensure a file is provided
+  if (!pdf) {
+    return { error: "PDF file is required" };
+  }
 
+  // If a project with the same name already exists, redirect immediately.
+  const existingProject = await prisma.chatPdf.findFirst({
+    where: { name: pdf.name },
+  });
+  if (existingProject) {
+    redirect(`/chatPdf/${existingProject.id}`);
+  }
+
+  let newProject: { id: string } | undefined = undefined;
   try {
     console.log("Received file for upload");
-
-    // Ensure a file is provided
-    if (!pdf) {
-      return { error: "PDF file is required" };
-    }
 
     // Convert File to Buffer
     const arrayBuffer = await pdf.arrayBuffer();
@@ -32,42 +40,58 @@ export async function uploadPDF(pdf: File | null) {
     // Extract text from the PDF
     const pdfData = await pdfParse(buffer);
     const extractedText = pdfData.text;
+    if (!extractedText.trim()) {
+      // Handle empty or whitespace-only content.
+      return { error: "Extracted text is empty" };
+    }
+    console.log("Extracted text:", extractedText);
 
     // Upload the PDF to Vercel Blob Storage
     const blob = await put(pdf.name, buffer, { access: "public" });
-    console.log("blob" , blob);
+    console.log("Blob URL:", blob.url);
 
-    let chat_id: any[] = [];
-    if (extractedText) {
-      console.log("Extracted text:", extractedText);
-      try {
-        console.log("Processing file:", pdf.name);
-        const fileKey = `${pdf.name}-${Date.now()}.pdf`;
-        const newProject = await prisma.chatPdf.create({
-          data: {
-            name: pdf.name,
-            url: blob.url,
-            content: extractedText,
-            userId: session.user.id,
-          },
-        });
-    
+    // Create a new project entry
+    newProject = await prisma.chatPdf.create({
+      data: {
+        name: pdf.name,
+        url: blob.url,
+        content: extractedText,
+        userId: session.user.id,
+      },
+    });
+    console.log("New project created:", newProject);
 
-      } catch (error) {
-        console.error("Error processing text:", error);
-      }
-    } else {
-      console.warn("Invalid file input. Skipping processing.");
+    // Process text to embeddings
+    const { chunks, chunkEmbeddings } = await processTextToEmbeddings(extractedText);
+    console.log("Final Chunks:", chunks);
+
+    if (!newProject) {
+      throw new Error("New project creation failed");
     }
 
-    return {
-      message: "File uploaded and processed successfully",
-      chat_id : chat_id.length > 0 ? chat_id[0].insertedId : null,
-      text: extractedText,
-      fileUrl: blob.url,
-    };
+    const vectors = chunks.map((chunk, index) => ({
+      id: md5(chunk.text),
+      values: chunkEmbeddings[index],
+      metadata: {
+        text: chunk.text,
+        startIndex: chunk.metadata.startIndex,
+        endIndex: chunk.metadata.endIndex,
+        title:  "PDF Document",
+        description: "PDF document",
+        source: blob.url,
+        timestamp: new Date().toISOString(),
+      }
+    }));
+    console.log("Vectors:", vectors);
+    const namespace = newProject.id; // or another namespace as needed
+    console.log("Uploading embeddings to Pinecone...");
+    await uploadToPinecone(vectors, namespace);
+    console.log("Processing and uploading complete.");
   } catch (error) {
     console.error("Error processing PDF:", error);
     return { error: "Failed to process PDF" };
   }
+
+  // Finally, perform the redirect outside of the try/catch.
+  redirect(`/chatPdf/${newProject!.id}`);
 }

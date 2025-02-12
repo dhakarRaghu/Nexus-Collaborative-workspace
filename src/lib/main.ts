@@ -34,10 +34,10 @@ async function scrapedContent(url: string): Promise<string | void> {
   console.log("Scraped content:", finalResult.content);
   
   // Process the scraped content into chunks, embeddings, and an aggregated embedding.
-  const { chunks, chunkEmbeddings, aggregatedEmbedding } = await processTextToEmbeddings(finalResult.content);
+  const { chunks, chunkEmbeddings } = await processTextToEmbeddings(finalResult.content);
   console.log("Final Chunks:", chunks);
   console.log("Chunk Embeddings:", chunkEmbeddings);
-  console.log("Aggregated Embedding:", aggregatedEmbedding);
+  // console.log("Aggregated Embedding:", aggregatedEmbedding);
   
   // Create Pinecone vector records from the chunks.
   const vectors = chunks.map((chunk, index) => ({
